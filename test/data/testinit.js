@@ -1,10 +1,5 @@
-var fireNative,
-	jQuery = this.jQuery || "jQuery", // For testing .noConflict()
-	$ = this.$ || "$",
-	originaljQuery = jQuery,
-	original$ = $;
-
 (function() {
+
 	// Config parameter to force basic code paths
 	QUnit.config.urlConfig.push({
 		id: "basic",
@@ -15,6 +10,9 @@ var fireNative,
 		document.querySelectorAll = null;
 		document.documentElement.contains = null;
 		document.documentElement.compareDocumentPosition = null;
+		// Return array of length two to pass assertion
+		// But support should be false as its not native
+		document.getElementsByClassName = function() { return [ 0, 1 ]; };
 	}
 })();
 
@@ -63,7 +61,8 @@ function t( a, b, c ) {
  * @result "data/test.php?foo=bar&10538358345554"
  */
 function url( value ) {
-	return value + (/\?/.test(value) ? "&" : "?") + new Date().getTime() + "" + parseInt(Math.random()*100000);
+	return ( window.__karma__ ? "base/test/" : "" ) + value +
+		(/\?/.test(value) ? "&" : "?") + new Date().getTime() + "" + parseInt(Math.random()*100000);
 }
 
 var createWithFriesXML = function() {
@@ -96,15 +95,26 @@ var createWithFriesXML = function() {
 	return jQuery.parseXML( string );
 };
 
-fireNative = document.createEvent ?
-	function( node, type ) {
-		var event = document.createEvent("HTMLEvents");
-		event.initEvent( type, true, true );
-		node.dispatchEvent( event );
-	} :
-	function( node, type ) {
-		var event = document.createEventObject();
-		node.fireEvent( "on" + type, event );
-	};
+function testIframeWithCallback( title, fileName, func ) {
+	test( title, function() {
+		var iframe;
 
-function moduleTeardown() {}
+		stop();
+		window.iframeCallback = function() {
+			var self = this,
+				args = arguments;
+			setTimeout(function() {
+				window.iframeCallback = undefined;
+				iframe.remove();
+				func.apply( self, args );
+				func = function() {};
+				start();
+			}, 0 );
+		};
+		iframe = jQuery( "<div/>" ).css({ position: "absolute", width: "500px", left: "-600px" })
+			.append( jQuery( "<iframe/>" ).attr( "src", url( "data/" + fileName ) ) )
+			.appendTo( "#qunit-fixture" );
+	});
+};
+
+window.iframeCallback = undefined;

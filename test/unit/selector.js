@@ -1,4 +1,4 @@
-module("selector", { teardown: moduleTeardown });
+module( "selector", { setup: setup } );
 
 // #### NOTE: ####
 // jQuery should not be used in this module
@@ -46,10 +46,10 @@ module("selector", { teardown: moduleTeardown });
 */
 
 test("element", function() {
-	expect( 38 );
+	expect( 39 );
 
 	var form, all, good, i, obj1, lengthtest,
-		siblingTest, iframe, iframeDoc, html;
+		siblingTest, siblingNext, iframe, iframeDoc, html;
 
 	equal( Sizzle("").length, 0, "Empty selector returns an empty array" );
 	deepEqual( Sizzle("div", document.createTextNode("")), [], "Text element as context fails silently" );
@@ -92,8 +92,9 @@ test("element", function() {
 	// Check for unique-ness and sort order
 	deepEqual( Sizzle("p, div p"), Sizzle("p"), "Check for duplicates: p, div p" );
 
-	t( "Checking sort order", "h2, h1", ["qunit-header", "qunit-banner", "qunit-userAgent"] );
-	t( "Checking sort order", "h2:first, h1:first", ["qunit-header", "qunit-banner"] );
+	jQuery( "<h1 id='h1'/><h2 id='h2'/><h2 id='h2-2'/>" ).prependTo( "#qunit-fixture" );
+	t( "Checking sort order", "#qunit-fixture h2, #qunit-fixture h1", ["h1", "h2", "h2-2"] );
+	t( "Checking sort order", "#qunit-fixture h2:first, #qunit-fixture h1:first", ["h1", "h2"] );
 	t( "Checking sort order", "#qunit-fixture p, #qunit-fixture p a", ["firstp", "simon1", "ap", "google", "groups", "anchor1", "mark", "sndp", "en", "yahoo", "sap", "anchor2", "simon", "first"] );
 
 	// Test Conflict ID
@@ -106,6 +107,11 @@ test("element", function() {
 	deepEqual( Sizzle("div em", siblingTest), [], "Element-rooted QSA does not select based on document context" );
 	deepEqual( Sizzle("div em, div em, div em:not(div em)", siblingTest), [], "Element-rooted QSA does not select based on document context" );
 	deepEqual( Sizzle("div em, em\\,", siblingTest), [], "Escaped commas do not get treated with an id in element-rooted QSA" );
+
+	siblingNext = document.getElementById("siblingnext");
+	document.createDocumentFragment().appendChild( siblingTest );
+	deepEqual( Sizzle( "em + :not(:has(*)):not(:empty), foo", siblingTest ), [ siblingNext ],
+		"Non-qSA path correctly sets detached context for sibling selectors (jQuery #14351)" );
 
 	iframe = document.getElementById("iframe"),
 		iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
@@ -153,11 +159,11 @@ test("XML Document Selectors", function() {
 });
 
 test("broken", function() {
-	expect( 26 );
+	expect( 29 );
 
 	var attrbad,
 		broken = function( name, selector ) {
-			raises(function() {
+			throws(function() {
 				// Setting context to null here somehow avoids QUnit's window.error handling
 				// making the e & e.message correct
 				// For whatever reason, without this,
@@ -204,9 +210,11 @@ test("broken", function() {
 	// Make sure attribute value quoting works correctly. See: #6093
 	attrbad = jQuery("<input type='hidden' value='2' name='foo.baz' id='attrbad1'/><input type='hidden' value='2' name='foo[baz]' id='attrbad2'/>").appendTo("#qunit-fixture");
 
-	broken( "Attribute not escaped", "input[name=foo.baz]", [] );
-	// Shouldn't be matching those inner brackets
-	broken( "Attribute not escaped", "input[name=foo[baz]]", [] );
+	broken( "No attribute value", "input[name=]" );
+	broken( "Attribute not escaped", "input[name=foo.baz]" );
+	broken( "Attribute not escaped", "input[name=foo[baz]]" );
+	broken( "Attribute quote mismatch", "input[name=''double-quoted'']" );
+	broken( "Attribute quote mismatch", "input[name='apostrophe'd']" );
 });
 
 test("id", function() {
@@ -311,7 +319,7 @@ test("class", function() {
 });
 
 test("name", function() {
-	expect( 13 );
+	expect( 14 );
 
 	var form;
 
@@ -337,17 +345,21 @@ test("name", function() {
 	t( "Find elements that have similar IDs", "[name=tName1]", ["tName1ID"] );
 	t( "Find elements that have similar IDs", "[name=tName2]", ["tName2ID"] );
 	t( "Find elements that have similar IDs", "#tName2ID", ["tName2ID"] );
+
+	t( "Case-sensitivity", "[name=tname1]", [] );
 });
 
-test("multiple", function() {
-	expect(6);
+test( "multiple", function() {
+	expect( 6 );
 
-	t( "Comma Support", "h2, #qunit-fixture p", ["qunit-banner","qunit-userAgent","firstp","ap","sndp","en","sap","first"] );
-	t( "Comma Support", "h2 , #qunit-fixture p", ["qunit-banner","qunit-userAgent","firstp","ap","sndp","en","sap","first"] );
-	t( "Comma Support", "h2 , #qunit-fixture p", ["qunit-banner","qunit-userAgent","firstp","ap","sndp","en","sap","first"] );
-	t( "Comma Support", "h2,#qunit-fixture p", ["qunit-banner","qunit-userAgent","firstp","ap","sndp","en","sap","first"] );
-	t( "Comma Support", "h2,#qunit-fixture p ", ["qunit-banner","qunit-userAgent","firstp","ap","sndp","en","sap","first"] );
-	t( "Comma Support", "h2\t,\r#qunit-fixture p\n", ["qunit-banner","qunit-userAgent","firstp","ap","sndp","en","sap","first"] );
+	jQuery( "#qunit-fixture" ).prepend( "<h2 id='h2'/>" );
+
+	t( "Comma Support", "#qunit-fixture h2, #qunit-fixture p", [ "h2","firstp","ap","sndp","en","sap","first" ] );
+	t( "Comma Support", "#qunit-fixture h2 , #qunit-fixture p", [ "h2","firstp","ap","sndp","en","sap","first" ] );
+	t( "Comma Support", "#qunit-fixture h2 , #qunit-fixture p", [ "h2","firstp","ap","sndp","en","sap","first" ] );
+	t( "Comma Support", "#qunit-fixture h2,#qunit-fixture p", [ "h2","firstp","ap","sndp","en","sap","first" ] );
+	t( "Comma Support", "#qunit-fixture h2,#qunit-fixture p ", [ "h2","firstp","ap","sndp","en","sap","first" ] );
+	t( "Comma Support", "#qunit-fixture h2\t,\r#qunit-fixture p\n", [ "h2","firstp","ap","sndp","en","sap","first" ] );
 });
 
 test("child and adjacent", function() {
@@ -434,8 +446,8 @@ test("attributes", function() {
 	t( "Attribute Equals Number", "#qunit-fixture li[tabIndex=-1]", ["foodWithNegativeTabIndex"] );
 
 	document.getElementById("anchor2").href = "#2";
-	t( "href Attribute", "p a[href^=#]", ["anchor2"] );
-	t( "href Attribute", "p a[href*=#]", ["simon1", "anchor2"] );
+	t( "href Attribute", "p a[href^='#']", ["anchor2"] );
+	t( "href Attribute", "p a[href*='#']", ["simon1", "anchor2"] );
 
 	t( "for Attribute", "form label[for]", ["label-for"] );
 	t( "for Attribute in form", "#form [for=action]", ["label-for"] );
@@ -591,7 +603,7 @@ test("pseudo - (first|last|only)-(child|of-type)", function() {
 
 	t( "First-of-type", "#qunit-fixture > p:first-of-type", ["firstp"] );
 	t( "Last-of-type", "#qunit-fixture > p:last-of-type", ["first"] );
-	t( "Only-of-type", "#qunit-fixture > :only-of-type", ["name+value", "firstUL", "empty", "floatTest", "iframe", "table"] );
+	t( "Only-of-type", "#qunit-fixture > :only-of-type", ["name+value", "firstUL", "empty", "floatTest", "iframe", "table", "last"] );
 
 	// Verify that the child position isn't being cached improperly
 	var secondChildren = jQuery("p:nth-child(2)").before("<div></div>");
@@ -642,8 +654,11 @@ test("pseudo - nth-child", function() {
 test("pseudo - nth-last-child", function() {
 	expect( 30 );
 
-	t( "Nth-last-child", "form:nth-last-child(5)", ["testForm"] );
-	t( "Nth-last-child (with whitespace)", "form:nth-last-child( 5 )", ["testForm"] );
+	jQuery( "#qunit-fixture" ).append( "<form id='nth-last-child-form'/><i/><i/><i/><i/>" );
+	t( "Nth-last-child", "form:nth-last-child(5)", ["nth-last-child-form"] );
+	t( "Nth-last-child (with whitespace)", "form:nth-last-child( 5 )", ["nth-last-child-form"] );
+
+
 	t( "Nth-last-child (case-insensitive)", "#form select:first option:NTH-last-child(3)", ["option1b"] );
 	t( "Not nth-last-child", "#qunit-fixture p:not(:nth-last-child(1))", ["firstp", "ap", "sndp", "en", "first"] );
 
@@ -686,7 +701,7 @@ test("pseudo - nth-of-type", function() {
 	t( "Nth-of-type(even)", "#ap :nth-of-type(even)", ["groups"] );
 	t( "Nth-of-type(2n+1)", "#ap :nth-of-type(2n+1)", ["google", "code1", "anchor1", "mark"] );
 	t( "Nth-of-type(odd)", "#ap :nth-of-type(odd)", ["google", "code1", "anchor1", "mark"] );
-	t( "Nth-of-type(-n+2)", "#qunit-fixture > :nth-of-type(-n+2)", ["firstp", "ap", "foo", "nothiddendiv", "name+value", "firstUL", "empty", "form", "floatTest", "iframe", "lengthtest", "table"] );
+	t( "Nth-of-type(-n+2)", "#qunit-fixture > :nth-of-type(-n+2)", ["firstp", "ap", "foo", "nothiddendiv", "name+value", "firstUL", "empty", "form", "floatTest", "iframe", "lengthtest", "table", "last"] );
 });
 
 test("pseudo - nth-last-of-type", function() {
@@ -699,7 +714,7 @@ test("pseudo - nth-last-of-type", function() {
 	t( "Nth-last-of-type(even)", "#ap :nth-last-of-type(even)", ["groups"] );
 	t( "Nth-last-of-type(2n+1)", "#ap :nth-last-of-type(2n+1)", ["google", "code1", "anchor1", "mark"] );
 	t( "Nth-last-of-type(odd)", "#ap :nth-last-of-type(odd)", ["google", "code1", "anchor1", "mark"] );
-	t( "Nth-last-of-type(-n+2)", "#qunit-fixture > :nth-last-of-type(-n+2)", ["ap", "name+value", "first", "firstUL", "empty", "floatTest", "iframe", "table", "name-tests", "testForm", "liveHandlerOrder", "siblingTest"] );
+	t( "Nth-last-of-type(-n+2)", "#qunit-fixture > :nth-last-of-type(-n+2)", ["ap", "name+value", "first", "firstUL", "empty", "floatTest", "iframe", "table", "name-tests", "testForm", "liveHandlerOrder", "siblingTest", "last"] );
 });
 
 test("pseudo - has", function() {
@@ -715,8 +730,9 @@ test("pseudo - misc", function() {
 
 	var select, tmp, input;
 
-	t( "Headers", ":header", ["qunit-header", "qunit-banner", "qunit-userAgent"] );
-	t( "Headers(case-insensitive)", ":Header", ["qunit-header", "qunit-banner", "qunit-userAgent"] );
+	jQuery( "<h1 id='h1'/><h2 id='h2'/><h2 id='h2-2'/>" ).prependTo( "#qunit-fixture" );
+	t( "Headers", "#qunit-fixture :header", ["h1", "h2", "h2-2"] );
+	t( "Headers(case-insensitive)", "#qunit-fixture :Header", ["h1", "h2", "h2-2"] );
 	t( "Multiple matches with the same context (cache check)", "#form select:has(option:first-child:contains('o'))", ["select1", "select2", "select3", "select4"] );
 
 	ok( Sizzle("#qunit-fixture :not(:has(:has(*)))").length, "All not grandparents" );
@@ -890,8 +906,8 @@ test("pseudo - :not", function() {
 test("pseudo - position", function() {
 	expect( 33 );
 
-	t( "First element", "div:first", ["qunit"] );
-	t( "First element(case-insensitive)", "div:fiRst", ["qunit"] );
+	t( "First element", "#qunit-fixture p:first", ["firstp"] );
+	t( "First element(case-insensitive)", "#qunit-fixture p:fiRst", ["firstp"] );
 	t( "nth Element", "#qunit-fixture p:nth(1)", ["ap"] );
 	t( "First Element", "#qunit-fixture p:first", ["firstp"] );
 	t( "Last Element", "p:last", ["first"] );
@@ -924,7 +940,7 @@ test("pseudo - position", function() {
 
 	t( "Check sort order with POS and comma", "#qunit-fixture em>em>em>em:first-child,div>em:first", ["siblingfirst", "siblinggreatgrandchild"] );
 
-	t( "Isolated position", ":last", ["last"] );
+	t( "Isolated position", "#qunit-fixture :last", ["last"] );
 
 	deepEqual( Sizzle( "*:lt(2) + *", null, [], Sizzle("#qunit-fixture > p") ), q("ap"), "Seeded pos with trailing relative" );
 
@@ -1048,7 +1064,7 @@ test("pseudo - :lang", function() {
 	anchor.lang = "ara\\b";
 	deepEqual( Sizzle( ":lang(ara\\b)", foo ), [], ":lang respects backslashes" );
 	deepEqual( Sizzle( ":lang(ara\\\\b)", foo ), [ anchor ], ":lang respects escaped backslashes" );
-	raises(function() {
+	throws(function() {
 		Sizzle.call( null, "dl:lang(c++)" );
 	}, function( e ) {
 		return e.message.indexOf("Syntax error") >= 0;
@@ -1075,37 +1091,68 @@ test("pseudo - :lang", function() {
 });
 
 test("caching", function() {
-	expect( 1 );
+	expect( 2 );
 	Sizzle( ":not(code)", document.getElementById("ap") );
 	deepEqual( Sizzle( ":not(code)", document.getElementById("foo") ), q("sndp", "en", "yahoo", "sap", "anchor2", "simon"), "Reusing selector with new context" );
+
+	t( "Deep ancestry caching in post-positional element matcher (jQuery #14657)",
+		"#qunit-fixture a:lt(3):parent",
+		[ "simon1", "google", "groups" ] );
 });
 
 asyncTest( "Iframe dispatch should not affect Sizzle, see jQuery #13936", 1, function() {
-	var i = 0,
+	var loaded = false,
 		thrown = false,
 		iframe = document.getElementById("iframe"),
 		iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
 
 	jQuery( iframe ).on( "load", function() {
-		var doc;
+		var form;
 
 		try {
-			i++;
-			doc = this.contentDocument || this.contentWindow.document;
-			Sizzle( "form", doc ).pop().submit();
-
+			iframeDoc = this.contentDocument || this.contentWindow.document;
+			form = Sizzle( "#navigate", iframeDoc )[ 0 ];
 		} catch ( e ) {
-			thrown = true;
+			thrown = e;
 		}
 
-		if ( i === 2 ) {
-			jQuery( this ).off("load");
-			ok( !thrown, "Iframe reload should not affect Sizzle, see jQuery #13936" );
+		if ( loaded ) {
+			strictEqual( thrown, false, "No error thrown from post-reload Sizzle call" );
 			start();
+		} else {
+			loaded = true;
+			form.submit();
 		}
 	});
 
 	iframeDoc.open();
-	iframeDoc.write("<body><form></form></body>");
+	iframeDoc.write("<body><form id='navigate'></form></body>");
 	iframeDoc.close();
+});
+
+test("matchesSelector", function() {
+	expect( 6 );
+
+	var el = document.getElementById("simon1"),
+		disconnected = document.createElement("div");
+
+	ok( Sizzle.matchesSelector( el, "[rel='bookmark']" ), "quoted attribute" );
+	ok( Sizzle.matchesSelector( el, "[rel=bookmark]" ), "unquoted attribute" );
+	ok( Sizzle.matchesSelector( el, "[\nrel = bookmark\t]" ), "unquoted attribute with non-semantic whitespace" );
+
+	ok( Sizzle.matchesSelector( disconnected, "div" ), "disconnected element" );
+
+	ok( Sizzle.matchesSelector( el, "* > *" ), "child combinator (matching)" );
+	ok( !Sizzle.matchesSelector( disconnected, "* > *" ), "child combinator (not matching)" );
+});
+
+test("select() with pre-compiled function", function() {
+	expect( 6 );
+
+	jQuery.each([ "#qunit-fixture #first", "ol#listWithTabIndex > li[tabindex]", "#liveSpan1" ],
+	function( i, selector ) {
+		var compiled = Sizzle.compile( selector );
+		equal( Sizzle.select( compiled, document ).length, 1, "Should match using a compiled selector function" );
+		equal( Sizzle.select( compiled, Sizzle( "#first")[0] ).length, 0, "Should not match with different context" );
+	});
 });

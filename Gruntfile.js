@@ -1,19 +1,57 @@
 module.exports = function( grunt ) {
-
 	"use strict";
 
-	var gzip = require("gzip-js"),
-		exec = require("child_process").exec,
-		fatal = grunt.fail.fatal,
-		rpreversion = /(\d\.\d+\.\d+)-pre/;
+	var gzip = require( "gzip-js" ),
+		isBrowserStack = process.env.BROWSER_STACK_USERNAME && process.env.BROWSER_STACK_ACCESS_KEY,
+		browsers = {
+			phantom: [ "PhantomJS" ],
+			desktop: [],
+			old: [],
+			ios: [],
+			oldAndroid: [],
+			newAndroid: []
+		},
+		files = {
+			source: "src/sizzle.js",
+			speed: "speed/speed.js",
+			tests: "test/unit/*.js",
+			karma: "test/karma/*.js",
+			grunt: [ "Gruntfile.js", "tasks/*" ]
+		};
+
+	// if Browserstack is set up, assume we can use it
+	if ( isBrowserStack ) {
+
+		// See https://github.com/jquery/sizzle/wiki/Sizzle-Documentation#browsers
+
+		browsers.desktop = [
+			"bs_chrome-32", "bs_chrome-33",
+
+			"bs_firefox-27", "bs_firefox-28",
+
+			"bs_ie-9", "bs_ie-10", "bs_ie-11",
+
+			"bs_opera-19", "bs_opera-20",
+
+			"bs_safari-6.1", "bs_safari-7"
+		];
+
+		browsers.old = [
+			"bs_ie-6", "bs_ie-7", "bs_ie-8"
+
+			// Opera 12.16 temporary unavailable on BS through Karma launcher
+			//,"bs_opera-12.16"
+		];
+
+		browsers.ios = [ "bs_ios-6", "bs_ios-7" ];
+		browsers.oldAndroid = [ "bs_android-2.3" ];
+		browsers.newAndroid = [ "bs_android-4.1" ];
+	}
 
 	// Project configuration.
 	grunt.initConfig({
-		pkg: grunt.file.readJSON("package.json"),
-		qunit: {
-			files: [ "test/index.html" ]
-		},
-		build: {
+		pkg: grunt.file.readJSON( "package.json" ),
+		compile: {
 			all: {
 				dest: "dist/sizzle.js",
 				src: "src/sizzle.js"
@@ -28,7 +66,10 @@ module.exports = function( grunt ) {
 					"dist/sizzle.min.js": [ "dist/sizzle.js" ]
 				},
 				options: {
-					compress: { evaluate: false },
+					compress: {
+						hoist_funs: false,
+						loops: false
+					},
 					banner: "/*! Sizzle v<%= pkg.version %> | (c) 2013 jQuery Foundation, Inc. | jquery.org/license */",
 					sourceMap: "dist/sizzle.min.map",
 					beautify: {
@@ -48,31 +89,59 @@ module.exports = function( grunt ) {
 				cache: "dist/.sizecache.json"
 			}
 		},
-		jshint: {
-			source: {
-				src: [ "src/sizzle.js" ],
+		bowercopy: {
+			options: {
+				clean: true
+			},
+
+			speed: {
 				options: {
-					jshintrc: ".jshintrc"
+					destPrefix: "speed/libs"
+				},
+
+				files: {
+					"requirejs/require.js": "requirejs/require.js",
+					"requirejs-domready/domReady.js": "requirejs-domready/domReady.js",
+					"requirejs-text/text.js": "requirejs-text/text.js",
+					"benchmark/benchmark.js": "benchmark/benchmark.js"
 				}
 			},
-			grunt: {
-				src: [ "Gruntfile.js" ],
+
+			"test/libs/qunit": "qunit/qunit"
+		},
+		jshint: {
+			source: {
+				src: files.source,
+				options: {
+					jshintrc: "src/.jshintrc"
+				}
+			},
+			build: {
+				src: [ files.grunt, files.karma ],
 				options: {
 					jshintrc: ".jshintrc"
 				}
 			},
 			speed: {
-				src: [ "speed/speed.js" ],
+				src: files.speed,
 				options: {
 					jshintrc: "speed/.jshintrc"
 				}
 			},
 			tests: {
-				src: [ "test/unit/*.js" ],
+				src: files.tests,
 				options: {
 					jshintrc: "test/.jshintrc"
 				}
 			}
+		},
+		jscs: {
+			src: [
+				files.source,
+				files.grunt,
+				files.speed,
+				files.karma
+			]
 		},
 		jsonlint: {
 			pkg: {
@@ -82,162 +151,83 @@ module.exports = function( grunt ) {
 				src: [ "bower.json" ]
 			}
 		},
+		karma: {
+			options: {
+				configFile: "test/karma/karma.conf.js",
+				singleRun: true
+			},
+			watch: {
+				background: true,
+				singleRun: false,
+				browsers: browsers.phantom
+			},
+			phantom: {
+				browsers: browsers.phantom
+			},
+			desktop: {
+				browsers: browsers.desktop
+			},
+			old: {
+				browsers: browsers.old,
+
+				// Support: IE6
+				// Have to re-arrange socket.io transports by prioritizing "jsonp-polling"
+				// otherwise IE6 can't connect to karma server
+				transports: [ "jsonp-polling" ],
+			},
+			ios: {
+				browsers: browsers.ios
+			},
+			oldAndroid: {
+				browsers: browsers.oldAndroid,
+				transports: [ "jsonp-polling" ]
+			},
+			newAndroid: {
+				browsers: browsers.newAndroid
+			},
+			all: {
+				browsers: browsers.phantom.concat(
+					browsers.desktop,
+					browsers.old,
+					browsers.ios,
+					browsers.newAndroid,
+					browsers.oldAndroid
+				)
+			}
+		},
 		watch: {
 			files: [
-				"<%= jshint.source.src %>",
-				"<%= jshint.grunt.src %>",
-				"<%= jshint.speed.src %>",
+				files.source,
+				files.grunt,
+				files.speed,
+				files.karma,
+				"test/**/*",
 				"<%= jshint.tests.src %>",
 				"{package,bower}.json",
-				"test/index.html"
+				"test/*.html"
 			],
-			tasks: "default"
+			tasks: [ "lint", "karma:watch:run" ]
 		}
 	});
 
-	grunt.registerMultiTask(
-		"build",
-		"Build sizzle.js to the dist directory. Embed date/version.",
-		function() {
-			var data = this.data,
-				dest = data.dest,
-				src = data.src,
-				version = grunt.config("pkg.version"),
-				compiled = grunt.file.read( src );
+	// Integrate Sizzle specific tasks
+	grunt.loadTasks( "tasks" );
 
-			// Embed version and date
-			compiled = compiled
-				.replace( /@VERSION/g, version )
-				.replace( "@DATE", function () {
-					var date = new Date();
+	// Load dev dependencies
+	require( "load-grunt-tasks" )( grunt );
 
-					// YYYY-MM-DD
-					return [
-						date.getFullYear(),
-						( "0" + ( date.getMonth() + 1 ) ).slice( -2 ),
-						( "0" + date.getDate() ).slice( -2 )
-					].join( "-" );
-				});
+	grunt.registerTask( "lint", [ "jsonlint", "jshint", "jscs" ] );
+	grunt.registerTask( "start", [ "karma:watch:start", "watch" ] );
 
-			// Write source to file
-			grunt.file.write( dest, compiled );
+	// Execute tests all browsers in sequential way,
+	// so slow connections would not affect other runs
+	grunt.registerTask( "tests", isBrowserStack ? [
+	    "karma:phantom", "karma:desktop", "karma:old",
+	    "karma:ios", "karma:newAndroid", "karma:oldAndroid"
+	] : "karma:phantom" );
 
-			grunt.log.ok( "File written to " + dest );
-		}
-	);
+	grunt.registerTask( "build", [ "lint", "tests", "compile", "uglify", "dist" ] );
+	grunt.registerTask( "default", [ "build", "compare_size" ] );
 
-	// Process files for distribution
-	grunt.registerTask( "dist", function() {
-		var files = grunt.file.expand( { filter: "isFile" }, "dist/*" ),
-			fs = require("fs");
-
-		files.forEach(function( filename ) {
-			var map,
-				text = fs.readFileSync( filename, "utf8" );
-
-			// Modify map/min so that it points to files in the same folder;
-			// see https://github.com/mishoo/UglifyJS2/issues/47
-			if ( /\.map$/.test( filename ) ) {
-				text = text.replace( /"dist\//g, "\"" );
-				fs.writeFileSync( filename, text, "utf-8" );
-			} else if ( /\.min\.js$/.test( filename ) ) {
-				// Wrap sourceMap directive in multiline comments (#13274)
-				text = text.replace( /\n?(\/\/@\s*sourceMappingURL=)(.*)/,
-					function( _, directive, path ) {
-						map = "\n" + directive + path.replace( /^dist\//, "" );
-						return "";
-					});
-				if ( map ) {
-					text = text.replace( /(^\/\*[\w\W]*?)\s*\*\/|$/,
-						function( _, comment ) {
-							return ( comment || "\n/*" ) + map + "\n*/";
-						});
-				}
-				fs.writeFileSync( filename, text, "utf-8" );
-			}
-		});
-	});
-
-	// Commit and tag the specified version
-	grunt.registerTask( "tag", function( version ) {
-		exec( "git tag " + version, this.async() );
-	});
-
-	grunt.registerTask( "commit", function( message ) {
-		// Always add dist directory
-		exec( "git add dist && git commit -m " + message, this.async() );
-	});
-
-	// Commit a new version
-	grunt.registerTask( "version", function( version ) {
-		if ( !/\d\.\d+\.\d+(?:-pre)?/.test(version) ) {
-			fatal( "Version must follow semver release format: " + version );
-			return;
-		}
-
-		var done = this.async(),
-			files = grunt.config("version.files"),
-			n = files.length,
-			rversion = /("version":\s*")[^"]+/;
-
-		files.forEach(function( filename ) {
-			// Update version in specified files
-			var text = grunt.file.read( filename );
-			text = text.replace( rversion, "$1" + version );
-			grunt.file.write( filename, text );
-			exec( "git add " + filename, function( err, stdout, stderr ) {
-				if ( err ) {
-					fatal( err + " " + stderr );
-					return;
-				}
-				// Commit when all files are added
-				if ( !--n ) {
-					grunt.config( "pkg.version", version );
-					grunt.task.run([ "build", "uglify", "dist", "commit:\"Update version to " + version + "\"" ]);
-					done();
-				}
-			});
-		});
-	});
-
-	// Release a version of sizzle
-	// Updates a pre version to released
-	// Inserts `next` as the new pre version
-	grunt.registerTask( "release", function( next ) {
-		if ( !rpreversion.test(next) ) {
-			fatal( "Next version should be a -pre version (x.x.x-pre): " + next );
-			return;
-		}
-		var version = grunt.config( "pkg.version" );
-		if ( !rpreversion.test(version) ) {
-			fatal( "Existing version is not a pre version: " + version );
-			return;
-		}
-		version = version.replace( rpreversion, "$1" );
-
-		// Build to dist directories along with a map and tag the release
-		grunt.task.run([
-			// Commit new version
-			"version:" + version,
-			// Tag new version
-			"tag:" + version,
-			// Commit next version
-			"version:" + next
-		]);
-	});
-
-	// Load grunt tasks from NPM packages
-	grunt.loadNpmTasks("grunt-contrib-jshint");
-	grunt.loadNpmTasks("grunt-contrib-qunit");
-	grunt.loadNpmTasks("grunt-contrib-uglify");
-	grunt.loadNpmTasks("grunt-contrib-watch");
-	grunt.loadNpmTasks("grunt-compare-size");
-	grunt.loadNpmTasks("grunt-git-authors");
-	grunt.loadNpmTasks("grunt-jsonlint");
-
-	// Default task
-	grunt.registerTask( "default", [ "jsonlint", "jshint", "build", "uglify", "dist", "qunit", "compare_size" ] );
-
-	// Task aliases
-	grunt.registerTask( "lint", ["jshint"] );
+	grunt.registerTask( "bower", "bowercopy" );
 };
